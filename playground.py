@@ -4,7 +4,8 @@ from datetime import datetime
 import MeCab
 import ipadic
 import os
-
+import csv
+from tqdm import tqdm
 
 class Feature_extractor:
 
@@ -129,4 +130,31 @@ class Feature_extractor:
         data = pd.concat([data, encoded_mokuteki,encoded_hindo, encoded_tsu, encoded_tsu], axis = 1)
         return data
 
-def hinshi_dist(text)
+
+CHASEN_ARGS = r' -F "%m\t%f[7]\t%f[6]\t%F-[0,1,2,3]\t%f[4]\t%f[5]\n"'
+CHASEN_ARGS += r' -U "%m\t%m\t%m\t%F-[0,1,2,3]\t\t\n"'
+wakati = MeCab.Tagger(ipadic.MECAB_ARGS + CHASEN_ARGS)
+
+paths = sorted(os.listdir("/home/hc/[NII-IDR] 楽天市場データ/review/unzip"))
+for path in tqdm(paths):
+
+    data = pd.read_csv(os.path.join("/home/hc/[NII-IDR] 楽天市場データ/review/unzip",path),sep='\t',quoting=csv.QUOTE_NONE)
+    col = ['投稿者ID', '店舗名', '店舗ID', '商品名', '商品ID', '商品ページURL', '商品ジャンルID', '商品ジャンルIDパス', '使い道',
+                        '目的', '頻度', '評価ポイント', 'レビュータイトル', 'レビュー内容', '参考になった数', 'レビュー登録日時']
+    data.columns = col
+    data.reset_index(inplace=True) #add index column
+    texts = data['レビュー内容']
+
+    dic = set()
+    for text in texts:
+        wakati_text = wakati.parse(text).split("\n")
+        for line in wakati_text:
+            tokens = line.split('\t')
+            if tokens[0] != "" and tokens[0] != "EOS":
+                if "-" in tokens[3]:
+                    result = tokens[3].split("-")[0]
+                else:
+                    result = tokens[3]
+            dic.add(result)
+
+    print(len(dic))
