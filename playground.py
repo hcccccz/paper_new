@@ -6,6 +6,60 @@ import ipadic
 import os
 import csv
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+import oseti
+
+
+
+def hinshi_dist(text):
+    word_type = ["その他","動詞","副詞","名詞","助動詞","記号","フィラー","接続詞","助詞","形容詞","連体詞","感動詞","接頭詞"]
+    type_dic = {i:0for i in word_type}
+    length = 0
+    CHASEN_ARGS = r' -F "%m\t%f[7]\t%f[6]\t%F-[0,1,2,3]\t%f[4]\t%f[5]\n"'
+    CHASEN_ARGS += r' -U "%m\t%m\t%m\t%F-[0,1,2,3]\t\t\n"'
+    wakati = MeCab.Tagger(ipadic.MECAB_ARGS + CHASEN_ARGS)
+    wakati_text = wakati.parse(text).split("\n")
+    for line in wakati_text:
+        tokens = line.split('\t')
+        if tokens[0] != "" and tokens[0] != "EOS":
+            if "-" in tokens[3]:
+                result = tokens[3].split("-")[0]
+            else:
+                result = tokens[3]
+            type_dic[result] += 1
+            length += 1
+    for key in type_dic.keys():
+        type_dic[key] = type_dic[key]/length
+    return type_dic
+
+
+
+
+def hinshi_dist(text):
+    word_type = ["その他","動詞","副詞","名詞","助動詞","記号","フィラー","接続詞","助詞","形容詞","連体詞","感動詞","接頭詞"]
+    type_dic = {i:0for i in word_type}
+    length = 0
+    CHASEN_ARGS = r' -F "%m\t%f[7]\t%f[6]\t%F-[0,1,2,3]\t%f[4]\t%f[5]\n"'
+    CHASEN_ARGS += r' -U "%m\t%m\t%m\t%F-[0,1,2,3]\t\t\n"'
+    wakati = MeCab.Tagger(ipadic.MECAB_ARGS + CHASEN_ARGS)
+    wakati_text = wakati.parse(text).split("\n")
+    for line in wakati_text:
+        tokens = line.split('\t')
+        if tokens[0] != "" and tokens[0] != "EOS":
+            if "-" in tokens[3]:
+                result = tokens[3].split("-")[0]
+            else:
+                result = tokens[3]
+            type_dic[result] += 1
+            length += 1
+    for key in type_dic.keys():
+        type_dic[key] = type_dic[key]/length
+    return type_dic
+
+
+
+
+
 
 class Feature_extractor:
 
@@ -102,11 +156,26 @@ class Feature_extractor:
     def encode_genre(self):
         self.features['商品ジャンルID'] = self.data['商品ジャンルID'].map(self.data['商品ジャンルID'].value_counts()).to_numpy()
 
+    def encode_hinshi(self): #词性
+        word_type = ["その他","動詞","副詞","名詞","助動詞","記号","フィラー","接続詞","助詞","形容詞","連体詞","感動詞","接頭詞"]
+        feature_dict = {}
+        for typ in word_type:
+            feature_dict[typ] = []
+
+        for line in tqdm(self.data['レビュー内容']):
+            result = hinshi_dist(line)
+            for key in result.keys():
+                feature_dict[key].append(result[key])
+
+        for key in feature_dict.keys():
+            self.features[key] = feature_dict[key]
+
+
     def get_y(self,cut_off:int):
         out = self.data["参考になった数"].to_numpy()
         return np.where(out > cut_off, 1, 0)
 
-    def to_frame(self, include_y=False):
+    def to_frame(self, cut_off,include_y=False):
         # self.date_feature()
         self.word_count() #单词数
         self.title_wc() #标题单词数
@@ -119,42 +188,68 @@ class Feature_extractor:
         self.encode_users() #用户
         self.encode_genre() #类别
         self.encode_denpou() #店铺
+        self.encode_hinshi()
         encoded_hindo = self.encode_hindo() #使用频度
         encoded_mokuteki = self.encode_mokuteki() #使用目的
         encoded_tsu = self.encode_tsu() #使用方法
 
         if include_y:
-            self.features['y'] = self.get_y(cut_off=1)
+            self.features['y'] = self.get_y(cut_off)
 
         data = pd.DataFrame(self.features)
         data = pd.concat([data, encoded_mokuteki,encoded_hindo, encoded_tsu, encoded_tsu], axis = 1)
         return data
+hishi = "名詞-数"
+path = "/home/hc/[NII-IDR] 楽天市場データ/review/sample/sample_from_raw_3.csv"
+extractor = Feature_extractor(path)
+texts = extractor.data['レビュー内容']
+text = texts[0]
 
 
-CHASEN_ARGS = r' -F "%m\t%f[7]\t%f[6]\t%F-[0,1,2,3]\t%f[4]\t%f[5]\n"'
-CHASEN_ARGS += r' -U "%m\t%m\t%m\t%F-[0,1,2,3]\t\t\n"'
-wakati = MeCab.Tagger(ipadic.MECAB_ARGS + CHASEN_ARGS)
+def unique_word(text):
+    text_split = []
+    CHASEN_ARGS = r' -F "%m\t%f[7]\t%f[6]\t%F-[0,1,2,3]\t%f[4]\t%f[5]\n"'
+    CHASEN_ARGS += r' -U "%m\t%m\t%m\t%F-[0,1,2,3]\t\t\n"'
+    wakati = MeCab.Tagger(ipadic.MECAB_ARGS + CHASEN_ARGS)
+    wakati_text = wakati.parse(text).split("\n")
+    for line in wakati_text:
+        tokens = line.split('\t')
+        if tokens[0] != "" and tokens[0] != "EOS":
+            text_split.append(tokens[0])
+    N = len(text_split)
+    V =len(set(text_split))
+    return V/np.sqrt(N)
 
-paths = sorted(os.listdir("/home/hc/[NII-IDR] 楽天市場データ/review/unzip"))
-for path in tqdm(paths):
 
-    data = pd.read_csv(os.path.join("/home/hc/[NII-IDR] 楽天市場データ/review/unzip",path),sep='\t',quoting=csv.QUOTE_NONE)
-    col = ['投稿者ID', '店舗名', '店舗ID', '商品名', '商品ID', '商品ページURL', '商品ジャンルID', '商品ジャンルIDパス', '使い道',
-                        '目的', '頻度', '評価ポイント', 'レビュータイトル', 'レビュー内容', '参考になった数', 'レビュー登録日時']
-    data.columns = col
-    data.reset_index(inplace=True) #add index column
-    texts = data['レビュー内容']
+extractor.data['参考になった数'] = np.where(extractor.data['参考になった数']>3, 1, 0)
+data_1 = extractor.data[extractor.data['参考になった数']==1]
+data_0 = extractor.data[extractor.data['参考になった数']==0]
 
-    dic = set()
-    for text in texts:
-        wakati_text = wakati.parse(text).split("\n")
-        for line in wakati_text:
-            tokens = line.split('\t')
-            if tokens[0] != "" and tokens[0] != "EOS":
-                if "-" in tokens[3]:
-                    result = tokens[3].split("-")[0]
-                else:
-                    result = tokens[3]
-            dic.add(result)
 
-    print(len(dic))
+
+
+
+t_1 = np.random.choice(data_1['レビュー内容'],size=25000,replace=False)
+t_0 = np.random.choice(data_0['レビュー内容'],size=25000,replace=False)
+# print(unique_word(t))
+t_1_s = []
+t_0_s = []
+for i in t_1:
+    t_1_s.append(unique_word(i))
+
+for i in t_0:
+    t_0_s.append(unique_word(i))
+
+
+plt.subplot(1,2,1)
+plt.hist(t_0_s)
+plt.subplot(1,2,2)
+plt.hist(t_1_s)
+
+print(np.mean(t_0_s))
+print(np.mean(t_1_s))
+
+
+
+
+plt.show()
