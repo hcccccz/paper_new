@@ -7,7 +7,7 @@ import os
 import csv
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-import oseti
+
 
 
 
@@ -200,7 +200,7 @@ class Feature_extractor:
         data = pd.concat([data, encoded_mokuteki,encoded_hindo, encoded_tsu, encoded_tsu], axis = 1)
         return data
 hishi = "名詞-数"
-path = "/home/hc/[NII-IDR] 楽天市場データ/review/sample/sample_from_raw_3.csv"
+path = "/home/hc/[NII-IDR] 楽天市場データ/review/sample/sample_from_raw_balanced.csv"
 extractor = Feature_extractor(path)
 texts = extractor.data['レビュー内容']
 text = texts[0]
@@ -229,8 +229,8 @@ data_0 = extractor.data[extractor.data['参考になった数']==0]
 
 
 
-t_1 = np.random.choice(data_1['レビュー内容'],size=25000,replace=False)
-t_0 = np.random.choice(data_0['レビュー内容'],size=25000,replace=False)
+t_1 = data_1['レビュー内容']
+t_0 = data_0['レビュー内容']
 # print(unique_word(t))
 t_1_s = []
 t_0_s = []
